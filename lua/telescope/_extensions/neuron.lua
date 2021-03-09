@@ -5,5 +5,6 @@ local neuron_builtin = require'telescope._extensions.neuron_builtin'
 return require'telescope'.register_extension{
   exports = {
     list = neuron_builtin.list,
+    backlinks = neuron_builtin.backlinks
   },
 }

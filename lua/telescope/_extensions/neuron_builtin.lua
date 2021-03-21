@@ -3,6 +3,7 @@ local actions = require('telescope.actions')
 local action_set = require('telescope.actions.set')
 local conf = require('telescope.config').values
 local entry_display = require('telescope.pickers.entry_display')
+local finders = require('telescope.finders')
 local mfinders = require('telescope.jfinders')
 --local log = require('telescope.log')
 local pickers = require('telescope.pickers')
@@ -62,6 +63,26 @@ local function gen_from_neuron_backlinks(opts)
   end
 end
 
+local function do_preprocess(line)
+  local result = {}
+  local t = string.sub(line, 1, 1)
+  -- Filter out non json lines
+  if t ~= '[' and t ~= '{' then
+    return {}
+  end
+  local pJson = json.decode(line)
+  for _, v in ipairs(pJson) do
+    table.insert(result, v)
+  end
+  return result
+end
+
+local function gen_from_neuron_all_notes_alt(opts)
+  return function(line)
+    return tableToZettel(opts.neuron_db_path, line)
+  end
+ end
+
 local function gen_from_neuron_all_notes(opts)
   return function(line)
     local result = {}
@@ -116,16 +137,26 @@ M.list = function(opts)
   opts.neuron_db_path = opts.neuron_db_path or vim.fn.expand('~/Sync/neuron')
   opts.cwd = opts.neuron_db_path
   opts.bin = opts.bin and vim.fn.expand(opts.bin) or vim.fn.exepath('neuron')
-  opts.entries_maker = utils.get_lazy_default(opts.entries_maker, gen_from_neuron_all_notes, opts)
+  opts.entry_maker = utils.get_lazy_default(opts.entry_maker, gen_from_neuron_all_notes_alt, opts)
+  opts.fn_preprocess = do_preprocess
+  --opts.entries_maker = utils.get_lazy_default(opts.entries_maker, gen_from_neuron_all_notes, opts)
 
   --A Sorter is called by the Picker on each item returned by the Finder. It return a number, which is equivalent to the "distance" between the current prompt and the entry returned by a finder.
   pickers.new(opts, {
     prompt_title = 'All Zettels',
-    finder = mfinders.new_multi_entries_job(function(_)
-        return { opts.bin, '-d', opts.neuron_db_path, 'query', '--zettels'}
-      end,
-      opts.entries_maker
-      ),
+    finder = finders.new_job(function(_)
+      return { opts.bin, '-d', opts.neuron_db_path, 'query', '--zettels' }
+    end,
+    opts.entry_maker,
+    opts.maximum_results,
+    opts.cwd,
+    opts.fn_preprocess
+    ),
+    --finder = mfinders.new_multi_entries_job(function(_)
+    --    return { opts.bin, '-d', opts.neuron_db_path, 'query', '--zettels'}
+    --  end,
+    --  opts.entries_maker
+    --  ),
     sorter = conf.file_sorter(opts),
     previewer = previewers.vim_buffer_cat.new(opts),
     attach_mappings = function(prompt_bufnr)
